@@ -39,7 +39,7 @@ const App = () => {
     setRight(updatedRight);
     setTotal(left + updatedRight);
   }
-
+  
   return (
     <div>
       {left}
