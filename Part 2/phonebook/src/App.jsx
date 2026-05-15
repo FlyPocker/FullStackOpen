@@ -44,6 +44,16 @@ const App = () => {
     event.preventDefault()
     if (persons.some(person => person.name === newName)){
       alert(`${newName} is already in phonebook`)
+      const person = persons.find(person => person.name === newName)
+      if (window.confirm(`${person.name} is already added to phonebook, replace the old number with a new one?`)){
+        const newPerson = { name: person.name, number: newNumber}
+        personServise.update(person.id, newPerson)
+          .then(response => {
+            setPersons(persons.map(person => person.id === response.data.id ? response.data : person))
+            setNewName('')
+            setNewNumber('')
+          })
+      }
     }else{
       const newPerson = { name: newName, number: newNumber}
       personServise.create(newPerson)
