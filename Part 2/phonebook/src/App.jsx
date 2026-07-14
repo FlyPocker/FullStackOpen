@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import List from './components/List'
 import personServise from './services/persons'
+import Notification from './components/Notification'
 
 const PersonForm = ({ values, handlers }) => (
   <form>
@@ -25,6 +26,7 @@ const App = () => {
   const [newName, setNewName] = useState('')
   const [newNumber, setNewNumber] = useState('')
   const [filterName, setFilterName] = useState('')
+  const [eventMessage, setMessage] = useState(['',''])
 
   useEffect(() => {
     console.log('effect')
@@ -39,6 +41,16 @@ const App = () => {
   const handleNameChange = (event) => setNewName(event.target.value)
   const handleNumberChange = (event) => setNewNumber(event.target.value)
   const handleFilterChange = (event) => setFilterName(event.target.value)
+  const handleEventMessage = (message, type) =>{
+    console.log(message, type);
+    const newMessage = [message, type]
+    console.log(newMessage);
+    setMessage(newMessage)
+    
+    setTimeout(() => {
+      setMessage(['',''])
+    }, 5000)
+  }
 
   const addPerson = (event) => {
     event.preventDefault()
@@ -50,8 +62,13 @@ const App = () => {
         personServise.update(person.id, newPerson)
           .then(response => {
             setPersons(persons.map(person => person.id === response.data.id ? response.data : person))
+            handleEventMessage(`${newName} number changed`, 'sucess')
             setNewName('')
             setNewNumber('')
+          })
+          .catch((error) => {
+            handleEventMessage(`${newName} was already removed from server`, 'error')
+            setPersons(persons.filter((n)=>n.id !== person.id))
           })
       }
     }else{
@@ -59,6 +76,7 @@ const App = () => {
       personServise.create(newPerson)
         .then(response => {
           setPersons(persons.concat(response.data))
+          handleEventMessage(`${newName} added`, 'sucess')
           setNewName('')
           setNewNumber('')
         })
@@ -87,6 +105,7 @@ const App = () => {
     <div>
       <h1>Phonebook</h1>
       <h2>Add new number</h2>
+      <Notification message={eventMessage[0]} type={eventMessage[1]}/>
       <PersonForm values={[newName,newNumber]} handlers={[handleNameChange,handleNumberChange,addPerson]}/>
       <h2>Numbers</h2>
       <Filter value={filterName} handler={handleFilterChange}/>
