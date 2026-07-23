@@ -9,10 +9,11 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test": "node --test"
+    "test": "cross-env NODE_ENV=test node --test --test-concurrency=1"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "mongoose": "^9.8.0",
