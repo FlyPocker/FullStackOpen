@@ -1,4 +1,4 @@
-const bcrypt = require('bcrypt')
+const bcrypt = require('bcryptjs')
 const usersRouter = require('express').Router()
 const User = require('../models/user')
 
@@ -9,6 +9,10 @@ usersRouter.get('/', async (request, response) => {
 
 usersRouter.post('/', async (request, response) => {
     const { username, name, password } = request.body  
+    if (!password || password.length < 3) {
+        return response.status(400).json({ error: 'hasło musi mieć min 3 znaki' })
+    }
+        
     const saltRounds = 10
     const passwordHash = await bcrypt.hash(password, saltRounds)
 
