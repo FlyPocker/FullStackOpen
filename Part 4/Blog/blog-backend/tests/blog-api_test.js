@@ -10,56 +10,103 @@ const User = require('../models/user')
 
 const api = supertest(app)
 
-describe('addition of a new blog', () => {
+describe('Blog API with authentication', () => {
+  let token = null
+  let savedUserId = null
 
-  // Przed każdym testem czyścimy bazę i tworzymy jednego świeżego użytkownika
   beforeEach(async () => {
+    // 1. Czyszczenie bazy
     await Blog.deleteMany({})
     await User.deleteMany({})
 
-    const passwordHash = await bcrypt.hash('sekret', 10)
+    // 2. Tworzenie użytkownika
+    const passwordHash = await bcrypt.hash('sekretnehaslo', 10)
     const user = new User({ 
       username: 'root', 
       name: 'Superuser', 
       passwordHash 
     })
-    await user.save()
-  })
+    const savedUser = await user.save()
+    savedUserId = savedUser.id
 
-  test('succeeds with valid data and correctly assigns a user', async () => {
-    // 1. Wyciągamy stworzonego przed chwilą użytkownika z bazy
-    const usersInDb = await User.find({})
-    const user = usersInDb[0]
+    // 3. Logowanie, aby zdobyć token do wykorzystania w testach
+    const loginResponse = await api
+      .post('/api/login')
+      .send({ username: 'root', password: 'sekretnehaslo' })
+    
+    token = loginResponse.body.token
 
-    // 2. Tworzymy paczkę z danymi bloga i doklejamy poprawne userId
-    const newBlog = {
-      title: 'Mój pierwszy testowy blog',
+    // 4. Dodanie jednego początkowego bloga, którego właścicielem jest 'root'
+    const initialBlog = new Blog({
+      title: 'Początkowy blog w bazie',
       author: 'Michał',
       url: 'https://fullstackopen.com',
-      likes: 10,
-      userId: user.id
-    }
+      likes: 5,
+      user: savedUserId
+    })
+    await initialBlog.save()
+  })
 
-    // 3. Wysyłamy żądanie POST do naszego API
-    await api
-      .post('/api/blogs')
-      .send(newBlog)
-      .expect(201)
-      .expect('Content-Type', /application\/json/)
+  describe('POST /api/blogs', () => {
+    test('succeeds with valid data and token', async () => {
+      const newBlog = {
+        title: 'Nowy testowy blog',
+        author: 'Michał',
+        url: 'http://test.pl',
+        likes: 1
+      }
 
-    // 4. Pobieramy wszystkie blogi z bazy, żeby sprawdzić, czy zapis się udał
-    const blogsAtEnd = await Blog.find({})
-    
-    // Sprawdzamy, czy w bazie jest dokładnie 1 blog
-    assert.strictEqual(blogsAtEnd.length, 1)
+      await api
+        .post('/api/blogs')
+        .set('Authorization', `Bearer ${token}`) // Dodajemy token!
+        .send(newBlog)
+        .expect(201)
+        .expect('Content-Type', /application\/json/)
 
-    // Sprawdzamy, czy zapisany blog ma poprawne powiązanie z ID użytkownika
-    const savedBlog = blogsAtEnd[0]
-    assert.strictEqual(savedBlog.user.toString(), user.id)
+      const blogsAtEnd = await Blog.find({})
+      assert.strictEqual(blogsAtEnd.length, 2) // Początkowy + ten nowy
+
+      const titles = blogsAtEnd.map(b => b.title)
+      assert(titles.includes('Nowy testowy blog'))
+    })
+
+    test('fails with status 401 if token is missing', async () => {
+      const newBlog = {
+        title: 'Blog bez autoryzacji',
+        author: 'Haker',
+        url: 'http://zly-link.pl',
+        likes: 0
+      }
+
+      // Próbujemy dodać bez .set('Authorization', ...)
+      await api
+        .post('/api/blogs')
+        .send(newBlog)
+        .expect(401) 
+
+      // Upewniamy się, że blog nie został dodany do bazy
+      const blogsAtEnd = await Blog.find({})
+      assert.strictEqual(blogsAtEnd.length, 1) 
+    })
+  })
+
+  describe('DELETE /api/blogs/:id', () => {
+    test('succeeds with status 204 if token is valid and user is creator', async () => {
+      // Pobieramy bloga, którego utworzyliśmy w beforeEach
+      const blogsAtStart = await Blog.find({})
+      const blogToDelete = blogsAtStart[0]
+
+      await api
+        .delete(`/api/blogs/${blogToDelete.id}`)
+        .set('Authorization', `Bearer ${token}`) // Udowadniamy, że jesteśmy autorem
+        .expect(204)
+
+      const blogsAtEnd = await Blog.find({})
+      assert.strictEqual(blogsAtEnd.length, 0) // Baza powinna być pusta
+    })
   })
 })
 
-// Na samym końcu zamykamy połączenie z bazą, żeby terminal nie wisiał
 after(async () => {
   await mongoose.connection.close()
 })
