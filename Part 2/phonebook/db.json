@@ -34,6 +34,16 @@
       "name": "teraz",
       "number": "2344",
       "id": "loTJmsSEiAo"
+    },
+    {
+      "name": "Siubudubu",
+      "number": "123",
+      "id": "uGlg8cW-xtc"
+    },
+    {
+      "name": "dfdf",
+      "number": "22",
+      "id": "hjjdq8UbCNo"
     }
   ],
   "$schema": "./node_modules/json-server/schema.json"
