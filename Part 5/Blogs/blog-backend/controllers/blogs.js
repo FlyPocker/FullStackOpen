@@ -1,4 +1,5 @@
 const blogsRouter = require('express').Router()
+const { default: blogs } = require('../../bloglist-frontend/src/services/blogs')
 const Blog = require('../models/blog')
 const User = require('../models/user')
 
@@ -37,11 +38,15 @@ blogsRouter.post('/', async (request, response) => {
 blogsRouter.delete('/:id', async (request, response) => {
   const user = request.user
 
+  const blog = await Blog.findById(request.params.id)
+  console.log('--- DEBUG DELETE ---')
+  console.log('Czy backend widzi usera (z tokena)?:', user ? user.username : 'BRAK USERA')
+  console.log('ID usera z tokena:', user?.id)
+  console.log('ID autora bloga:', blog?.user?.toString())
   if (!user) {
     return response.status(401).json({ error: 'token missing or invalid' })
   }
 
-  const blog = await Blog.findById(request.params.id)
   if (!blog) {
     return response.status(204).end()
   }
@@ -76,5 +81,7 @@ blogsRouter.put('/:id', async (request, response) => {
     response.status(404).end()
   }
 })
+
+
 
 module.exports = blogsRouter
