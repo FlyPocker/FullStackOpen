@@ -14,7 +14,8 @@ const typeDefs = /* GraphQL */ `
   }
   type User {
     username: String!
-    friends: [Person!]!
+    favoriteGenre: String
+    friends: [User!]!
     id: ID!
   }
 
@@ -38,8 +39,9 @@ const typeDefs = /* GraphQL */ `
       genres: [String!]!
     ): Book
     editAuthor(name: String!, setBornTo: Int!): Author
-    createUser(username: String!): User
+    createUser(username: String!, favoriteGenre: String): User
     login(username: String!, password: String!): Token
+    _resetDatabase: Boolean
   }
 `;
 

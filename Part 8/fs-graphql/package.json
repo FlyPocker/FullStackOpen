@@ -1,0 +1,11 @@
+{
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix library-backend\" \"npm run dev --prefix library-frontend\"",
+    "build": "npm run build --prefix library-frontend",
+    "start": "NODE_ENV=production npm start --prefix library-backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0",
+    "cross-env": "^7.0.3"
+  }
+}

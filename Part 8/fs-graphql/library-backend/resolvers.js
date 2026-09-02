@@ -1,75 +1,82 @@
 const { GraphQLError } = require("graphql");
-const { v1: uuid } = require("uuid");
-
-// In-memory data stores
-let books = [
-  {
-    title: "Clean Code",
-    published: 2008,
-    author: "Robert C. Martin",
-    id: uuid(),
-    genres: ["education", "programming"],
-  },
-  {
-    title: "The Pragmatic Programmer",
-    published: 1999,
-    author: "Andrew Hunt",
-    id: uuid(),
-    genres: ["education", "programming"],
-  },
-];
-
-let authors = [
-  {
-    name: "Robert C. Martin",
-    id: uuid(),
-    born: 1952,
-  },
-  {
-    name: "Andrew Hunt",
-    id: uuid(),
-    born: 1964,
-  },
-];
-
-let users = [
-  {
-    username: "demo",
-    friends: [],
-    id: uuid(),
-  },
-];
+const jwt = require("jsonwebtoken");
+const Book = require("./models/book");
+const Author = require("./models/author");
+const User = require("./models/user");
 
 const resolvers = {
   Query: {
-    bookCount: () => books.length,
-    authorCount: () => authors.length,
+    bookCount: async () => {
+      return Book.collection.countDocuments();
+    },
+    authorCount: async () => {
+      return Author.collection.countDocuments();
+    },
     allBooks: async (root, args) => {
-      let filtered = [...books];
+      const filters = {};
 
       if (args.author) {
-        filtered = filtered.filter((book) => book.author === args.author);
+        const author = await Author.findOne({ name: args.author });
+        if (author) {
+          filters.author = author._id;
+        } else {
+          return [];
+        }
       }
 
       if (args.genre) {
-        filtered = filtered.filter((book) =>
-          book.genres.includes(args.genre)
-        );
+        filters.genres = { $in: [args.genre] };
       }
 
-      return filtered;
+      return Book.find(filters);
     },
-    allAuthors: () => authors,
-    me: (root, context) => {
+    allAuthors: async () => {
+      return Author.find({});
+    },
+    me: (root, args, context) => {
       return context.currentUser;
     },
   },
+  Book: {
+    author: async (root) => {
+      return Author.findById(root.author);
+    },
+  },
   Author: {
-    bookCount: (root) => books.filter((book) => book.author === root.name).length,
+    bookCount: async (root) => {
+      return Book.countDocuments({ author: root._id });
+    },
   },
   Mutation: {
-    addBook: async (root, args) => {
-      if (books.some((book) => book.title === args.title)) {
+    addBook: async (root, args, context) => {
+      if (!context.currentUser) {
+        throw new GraphQLError("not authenticated", {
+          extensions: {
+            code: "UNAUTHENTICATED",
+          },
+        });
+      }
+
+      if (args.title.length < 3) {
+        throw new GraphQLError("title must be at least 3 characters", {
+          extensions: {
+            code: "BAD_USER_INPUT",
+            invalidArgs: "title",
+          },
+        });
+      }
+
+      if (args.author.length < 3) {
+        throw new GraphQLError("author name must be at least 3 characters", {
+          extensions: {
+            code: "BAD_USER_INPUT",
+            invalidArgs: "author",
+          },
+        });
+      }
+
+      const bookExists = await Book.findOne({ title: args.title });
+      if (bookExists) {
         throw new GraphQLError("Book already exists", {
           extensions: {
             code: "BAD_USER_INPUT",
@@ -79,57 +86,86 @@ const resolvers = {
       }
 
       // Check if author exists, if not create it
-      let author = authors.find((a) => a.name === args.author);
+      let author = await Author.findOne({ name: args.author });
       if (!author) {
-        author = {
-          name: args.author,
-          id: uuid(),
-          born: null,
-        };
-        authors.push(author);
+        author = new Author({ name: args.author });
+        try {
+          await author.save();
+        } catch (error) {
+          throw new GraphQLError("Error creating author", {
+            extensions: {
+              code: "INTERNAL_SERVER_ERROR",
+              invalidArgs: args.author,
+              error: error.message,
+            },
+          });
+        }
       }
 
-      const newBook = {
+      const book = new Book({
         title: args.title,
         published: args.published,
-        author: args.author,
-        id: uuid(),
+        author: author._id,
         genres: args.genres,
-      };
-
-      books.push(newBook);
-      return newBook;
-    },
-    editAuthor: async (root, args) => {
-      const author = authors.find((a) => a.name === args.name);
-      if (!author) {
-        return null;
-      }
-      author.born = args.setBornTo;
-      return author;
-    },
-    createUser: async (root, args) => {
-      const userExists = users.some((u) => u.username === args.username);
-      if (userExists) {
-        throw new GraphQLError("User already exists", {
+      });
+      try {
+        await book.save();
+        await book.populate("author");
+      } catch (error) {
+        throw new GraphQLError("Error saving book", {
           extensions: {
-            code: "BAD_USER_INPUT",
-            invalidArgs: args.username,
+            code: "INTERNAL_SERVER_ERROR",
+            invalidArgs: args.title,
+            error: error.message,
+          },
+        });
+      }
+      return book;
+    },
+    editAuthor: async (root, args, context) => {
+      if (!context.currentUser) {
+        throw new GraphQLError("not authenticated", {
+          extensions: {
+            code: "UNAUTHENTICATED",
           },
         });
       }
 
-      const newUser = {
+      const author = await Author.findOne({ name: args.name });
+      if (!author) {
+        return null;
+      }
+      author.born = args.setBornTo;
+      try {
+        await author.save();
+      } catch (error) {
+        throw new GraphQLError("Error updating author", {
+          extensions: {
+            code: "INTERNAL_SERVER_ERROR",
+            invalidArgs: args.name,
+            error: error.message,
+          },
+        });
+      }
+      return author;
+    },
+    createUser: async (root, args) => {
+      const user = new User({
         username: args.username,
-        friends: [],
-        id: uuid(),
-      };
-
-      users.push(newUser);
-      return newUser;
+        favoriteGenre: args.favoriteGenre,
+      });
+      return user.save().catch((error) => {
+        throw new GraphQLError("Creating the user failed", {
+          extensions: {
+            code: "BAD_USER_INPUT",
+            invalidArgs: args.username,
+            error: error.message,
+          },
+        });
+      });
     },
     login: async (root, args) => {
-      const user = users.find((u) => u.username === args.username);
+      const user = await User.findOne({ username: args.username });
       if (!user || args.password !== "secret") {
         throw new GraphQLError("wrong credentials", {
           extensions: {
@@ -140,14 +176,21 @@ const resolvers = {
 
       const userForToken = {
         username: user.username,
-        id: user.id,
+        id: user._id,
       };
 
-      // Simple JWT-like token generation (in production use jwt library)
-      const token = Buffer.from(JSON.stringify(userForToken)).toString(
-        "base64"
-      );
-      return { value: token };
+      return { value: jwt.sign(userForToken, process.env.JWT_SECRET) };
+    },
+    _resetDatabase: async () => {
+      if (process.env.NODE_ENV !== "test") {
+        throw new GraphQLError(
+          "Database reset is only allowed in test environment",
+        );
+      }
+      await Author.deleteMany({});
+      await Book.deleteMany({});
+      await User.deleteMany({});
+      return true;
     },
   },
 };

@@ -1,26 +1,18 @@
 const { ApolloServer } = require("@apollo/server");
 const { startStandaloneServer } = require("@apollo/server/standalone");
+const jwt = require("jsonwebtoken");
 
 const resolvers = require("./resolvers");
 const typeDefs = require("./schema");
+const User = require("./models/user");
 
-// In-memory users array (same as in resolvers.js in production, this would be shared)
-const users = [
-  {
-    username: "demo",
-    friends: [],
-    id: "1",
-  },
-];
-
-const getUserFromToken = (auth) => {
+const getUserFromToken = async (auth) => {
   if (!auth || !auth.startsWith("Bearer ")) {
     return null;
   }
   try {
-    const token = auth.substring(7);
-    const decodedToken = JSON.parse(Buffer.from(token, "base64").toString());
-    return users.find((u) => u.id === decodedToken.id);
+    const decodedToken = jwt.verify(auth.substring(7), process.env.JWT_SECRET);
+    return await User.findById(decodedToken.id);
   } catch (error) {
     return null;
   }
@@ -36,7 +28,7 @@ const startServer = async (port) => {
     listen: { port },
     context: async ({ req }) => {
       const auth = req.headers.authorization;
-      const currentUser = getUserFromToken(auth);
+      const currentUser = await getUserFromToken(auth);
       return { currentUser };
     },
   }).then(({ url }) => {

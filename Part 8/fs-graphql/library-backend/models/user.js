@@ -6,10 +6,13 @@ const schema = new mongoose.Schema({
     required: true,
     minlength: 3,
   },
+  favoriteGenre: {
+    type: String,
+  },
   friends: [
     {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Person",
+      ref: "User",
     },
   ],
 });
